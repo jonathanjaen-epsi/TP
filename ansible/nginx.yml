@@ -1,0 +1,56 @@
+# language: YAML
+# Playbook Ansible pour installer Nginx sur Ubuntu local
+
+---
+- name: Installer et configurer Nginx sur Ubuntu Local
+  hosts: localhost       # 'localhost' pour une installation en local
+  become: yes            # utiliser les privilèges root
+  vars:
+    nginx_port: 80
+
+  tasks:
+    - name: Mettre à jour les paquets du système
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Installer Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Vérifier que Nginx est installé
+      command: nginx -v
+      register: nginx_version
+      ignore_errors: yes
+
+    - name: Afficher la version de Nginx
+      debug:
+        msg: "Version de Nginx installée : {{ nginx_version.stderr }}"
+      when: nginx_version.stderr is defined
+
+    - name: Démarrer et activer le service Nginx
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Vérifier que Nginx répond sur le port HTTP
+      uri:
+        url: http://localhost:{{ nginx_port }}
+        status_code: 200
+      register: nginx_status
+      retries: 3
+      delay: 5
+      until: nginx_status.status == 200
+
+    - name: Afficher le résultat du test Nginx
+      debug:
+        msg: "Nginx est installé et fonctionne correctement !"
+      when: nginx_status.status == 200
+
+    - name: Ouvrir le port HTTP dans le firewall (UFW)
+      ufw:
+        rule: allow
+        name: 'Nginx HTTP'
+        state: enabled
